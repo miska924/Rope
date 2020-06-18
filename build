@@ -1,0 +1,5 @@
+#!/bin/bash
+
+g++ `pkg-config --cflags  /usr/lib/pkgconfig/opencv4.pc` ./sources/main.cpp -o bin\
+    `pkg-config --libs  /usr/lib/pkgconfig/opencv4.pc` --std=c++17 -I ./sources/ -O3\
+    -L /usr/lib -ljpeg -lGL -lGLU -lglut
