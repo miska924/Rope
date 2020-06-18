@@ -6,19 +6,20 @@ const int WinHei = 1000;
 const int WinWid = 1000;
 
 const double EPS = 1e-6;
-const double SLOWNESS = 0.99999;
+const double SLOWNESS = 0.9999;
 const int INF = 1e9;
-const int SZ = 10;
+const int SZ = 50;
 
+const int DIM = 100;
 const int ALL = SZ * 4;
-const int ROPE = max(1, 100 / SZ);
-const double STEP = 0.1;
+const int ROPE = 1;
+const double STEP = 0.001;
 
 class point {
   public:
-    int x, y;
+    double x, y;
 
-    point(int xx, int yy) {
+    point(double xx, double yy) {
       x = xx;
       y = yy;
     }
@@ -26,18 +27,22 @@ class point {
     point(int id) {
       assert(0 <= id && id < ALL);
       if (id < SZ) {
-        x = id;
+        x = double(id) / SZ;
         y = 0;
       } else if (id < SZ * 2) {
-        x = SZ;
-        y = id - SZ;
+        x = 1.0;
+        y = double(id - SZ) / SZ;
       } else if (id < SZ * 3) {
-        x = SZ - (id - SZ * 2);
-        y = SZ;
+        x = 1.0 - double(id - SZ * 2) / SZ;
+        y = 1.0;
       } else {
         x = 0;
-        y = SZ - (id - SZ * 3);
+        y = 1.0 - double(id - SZ * 3) / SZ;
       }
+    }
+
+    point norm(double len) const {
+      return point(x * len / (*this).len(), y * len / (*this).len());
     }
 
     point operator-() const {
@@ -53,7 +58,11 @@ class point {
     }
 
     point operator*(double k) const {
-      return point(int((double(x)) * k), int((double(y)) * k));
+      return point(x * k, y * k);
+    }
+
+    point operator/(double k) const {
+      return point(x / k, y / k);
     }
 
     double len() const {
@@ -61,78 +70,43 @@ class point {
     }
 
     bool operator==(const point& other) const {
-      return (x == other.x) && (y == other.y);
+      return (abs(x - other.x) < EPS) && (abs(y - other.y) < EPS);
     }
 
     bool operator!=(const point& other) const {
-      return (x != other.x) || (y != other.y);
+      return !(*this == other);
     }
 };
 
-double fitness(const vvb& pic, const Mat& im) { // const Mat<CV_8uC1>& im
-  vector<vector<int> > got(SZ, vector<int>(SZ, 0));
+double fitness(const vvb& pic, const Mat& im) { // const Mat<CV_8UC1>& im
+  vector<vector<int> > got(DIM, vector<int>(DIM, 0));
   for (int i = 0; i < ALL; ++i) {
-    //cerr << "     i: " << i << endl;
-    assert(pic.size() == ALL && pic[i].size() == ALL);
     for (int j = i + 1; j < ALL; ++j) {
-      //cerr << "       j: " << j << endl;
       if (pic[i][j]) {
         point a(i);
         point b(j);
-        point last(-1, -1);
         for (double k = 0; k < (b - a).len(); k += STEP) {
-          point cur = a + (b - a) * k;
-          if (cur != last && cur.x < SZ && cur.y < SZ && cur.x >= 0 && cur.y >= 0) {
-            got[cur.x][cur.y]++;
+          point cur = a + (b - a).norm(k);
+          if (cur.x < 1.0 && cur.y < 1.0 && cur.x >= 0 && cur.y >= 0) {
+            got[int(cur.x * DIM)][int(cur.y * DIM)]++;
           }
-          last = cur;
         }
       }
     }
   }
-  //cerr << "{" << endl;
   double res = 0;
-  for (int i = 0; i < im.rows; ++i) {
-    for (int j = 0; j < im.cols; ++j) {
-      res += double(abs(255 - got[i][j] * ROPE - int(im.at<uint8_t>(i, j))))
-        * (double(2 * SZ) - (point(SZ / 2, SZ / 2) - point(i, j)).len())
-      ;
+  for (int i = 0; i < DIM; ++i) {
+    for (int j = 0; j < DIM; ++j) {
+      double x = max(0.0, (double(abs(255 - got[i][j] * ROPE - int(im.at<uint8_t>(i, j)))))
+        * (2.0 - (point(0.5, 0.5) - point(double(i) / DIM, double(j) / DIM)).len()));
+      res += x;
     }
   }
-  //cerr << "}" << endl;
   return res;
 }
 
-void showPic(const vvb& pic) {
-  Mat got(SZ, SZ, CV_8UC1);
-  for (int i = 0; i < got.rows; ++i) {
-    for (int j = 0; j < got.cols; ++j) {
-      got.at<uint8_t>(i, j) = 255;
-    }
-  }
-  for (int i = 0; i < ALL; ++i) {
-    for (int j = i + 1; j < ALL; ++j) {
-      if (pic[i][j]) {
-        point a(i);
-        point b(j);
-        point last(-1, -1);
-        for (int k = 0; k <= (b - a).len(); ++k) {
-          point cur = a + (b - a) * (double(k) / (b - a).len());
-          if (cur != last && cur.x < SZ && cur.y < SZ && cur.x >= 0 && cur.y >= 0) {
-            got.at<uint8_t>(cur.x, cur.y) = max(0, int(got.at<uint8_t>(cur.x, cur.y)) - ROPE);
-          }
-          last = cur;
-        }
-      }
-    }
-  }
-  namedWindow("Display Image", WINDOW_AUTOSIZE);
-  imshow("Display Image", got);
-  waitKey(0);
-}
-
 vvb next(vvb cur, double t) {
-  int cnt = min(ALL * ALL, max(int(ALL * ALL * (1e3 * t)), 1));
+  int cnt = min(ALL * ALL / 20, max(int(ALL * ALL * (1e3 * t)), 1));
   while (cnt--) {
     int i = rand() % ALL;
     int j = rand() % ALL;
@@ -144,29 +118,6 @@ vvb next(vvb cur, double t) {
   return cur;
 }
 
-// vvb burn(const Mat& im) {
-//   vvb cur(ALL, vector<bool>(ALL, 0)), opt(ALL, vector<bool>(ALL, 0));
-//   int cure = fitness(cur, im);
-//   int opte = cure;
-//   double t = 1;
-//   while (t > EPS) {
-//     cerr << t << " " << cure << " " << opte << endl;
-//     vvb nxt = next(cur, t);
-//     double nxte = fitness(nxt, im);
-//     if (nxte < cure || (exp((opte - nxte) / t) > double(rand() % 1000) / 1000.0)) {
-//       cure = nxte;
-//       cur = nxt;
-//     }
-//     if (opte > cure) {
-//       opt = cur;
-//       opte = cure;
-//     }
-//     t *= SLOWNESS;
-//   }
-//   showPic(opt);
-//   return opt;
-// }
-
 vvb cur, opt;
 double cure;
 double opte;
@@ -176,9 +127,8 @@ Mat res;
 void Draw() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	glPushMatrix();
-
-
-  Mat got(SZ, SZ, CV_8UC1);
+/*
+  Mat got(DIM, DIM, CV_8UC1);
   for (int i = 0; i < got.rows; ++i) {
     for (int j = 0; j < got.cols; ++j) {
       got.at<uint8_t>(i, j) = 255;
@@ -190,38 +140,36 @@ void Draw() {
       if (cur[i][j]) {
         point a(i);
         point b(j);
-        point last(-1, -1);
         for (double k = 0; k < (b - a).len(); k += STEP) {
-          point cur = a + (b - a) * k;
-          if (cur != last && cur.x < SZ && cur.y < SZ && cur.x >= 0 && cur.y >= 0) {
-            got.at<uint8_t>(cur.x, cur.y) = max(0, int(got.at<uint8_t>(cur.x, cur.y)) - ROPE);
+          point cur = a + (b - a).norm(k);
+          if (cur.x < 1.0 && cur.y < 1.0 && cur.x >= 0 && cur.y >= 0) {
+            got.at<uint8_t>(int(cur.x * DIM) , int(cur.y * DIM)) = max(0, int(got.at<uint8_t>(int(cur.x * DIM), int(cur.y * DIM))) - ROPE);
           }
-          last = cur;
         }
       }
     }
   }
 
-  for (int i = 0; i < SZ; ++i) {
-    for (int j = 0; j < SZ; ++j) {
+  for (int i = 0; i < DIM; ++i) {
+    for (int j = 0; j < DIM; ++j) {
       double c = double(got.at<uint8_t>(i, j)) / 255;
       glColor4f(c, c, c, 0);
       glBegin(GL_QUADS);
-        glVertex2f(j, SZ - i);
-        glVertex2f(j + 1, SZ - i);
-        glVertex2f(j + 1, SZ - i - 1);
-        glVertex2f(j, SZ - i - 1);
+        glVertex2f(double(j) / DIM, 1.0 - double(i) / DIM);
+        glVertex2f(double(j + 1) / DIM, 1.0 - double(i) / DIM);
+        glVertex2f(double(j + 1) / DIM, 1.0 - double(i + 1) / DIM);
+        glVertex2f(double(j) / DIM, 1.0 - double(i + 1) / DIM);
       glEnd();
     }
-  }
+  }*/
 
   glColor4f(0, 0, 0, 0.5);
   for (int i = 0; i < ALL; ++i) {
     for (int j = i + 1; j < ALL; ++j) {
       if (cur[i][j]) {
         glBegin(GL_LINES);
-          glVertex2f(point(i).y, SZ - point(i).x);
-          glVertex2f(point(j).y, SZ - point(j).x);
+          glVertex2f(point(i).y, 1.0 - point(i).x);
+          glVertex2f(point(j).y, 1.0 - point(j).x);
         glEnd();
       }
     }
@@ -266,27 +214,44 @@ void Initialize() {
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(0, SZ, 0, SZ, -1, 1);
+	glOrtho(0, 1, 0, 1, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 }
 
 int main(int argc, char* argv[]) {
   srand(time(NULL));
   Mat I = imread(argv[1], 1);
-  res = Mat(SZ, SZ, CV_8UC1);
-  for (int i = 0; i < SZ; ++i) {
-    for (int j = 0; j < SZ; ++j) {
+  Mat im = I.clone();
+  resize(I, im, cv::Size(DIM, DIM), 0, 0, INTER_LINEAR);
+  cvtColor(im, im, cv::COLOR_BGR2GRAY);
+  res = im.clone();
+  bilateralFilter(im, res, 3, 75, 75);
+  im = res.clone();
+
+  /*for (int i = 0; i < DIM; ++i) {
+    for (int j = 0; j < DIM; ++j) {
       int sum = 0;
-      int cnt = 0;
-      for (int x = i * (I.rows / SZ); x < min((i + 1) * (I.rows / SZ), I.rows); ++x) {
-        for (int y = j * (I.cols / SZ); y < min((j + 1) * (I.cols / SZ), I.cols); ++y) {
-          cnt++;
-          sum += (int(I.at<Vec3b>(x, y)[0]) + int(I.at<Vec3b>(x, y)[1]) + int(I.at<Vec3b>(x, y)[2])) / 3;
+      for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+          if (abs(dx) + abs(dy) != 0) {
+            if (0 <= i + dx && i + dx < DIM &&
+                0 <= j + dy && j + dy < DIM) {
+                  sum -= im.at<uint8_t>(i + dx, j + dy);
+            } else {
+              sum -= int(im.at<uint8_t>(i, j));
+            }
+          } else if (dx == 0 && dy == 0) {
+            sum += 8 * int(im.at<uint8_t>(i, j));
+          }
         }
       }
-      res.at<uint8_t>(i, j) = sum / cnt;
+      res.at<uint8_t>(i, j) = 100 - min(90, abs(sum));
     }
-  }
+  }*/
+
+  namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+  imshow( "Display window", res);                   // Show our image inside it.
+  waitKey(0);
 
   cur = vvb(ALL, vector<bool>(ALL, 0));
   opt = vvb(ALL, vector<bool>(ALL, 0));
