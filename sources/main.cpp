@@ -1,18 +1,20 @@
 #include "rope.hpp"
 
 using vvb = vector<vector<bool> >;
+using vvi = vector<vector<int> >;
 
-const int WinHei = 1000;
-const int WinWid = 1000;
+const int K = 3;
+const int WinHei = 800;
+const int WinWid = 800;
 
 const double EPS = 1e-6;
 const double SLOWNESS = 0.9999;
 const int INF = 1e9;
-const int SZ = 50;
+const int SZ = 200;
 
-const int DIM = 100;
+const int DIM = 200;
 const int ALL = SZ * 4;
-const int ROPE = 1;
+const int ROPE = 4;
 const double STEP = 0.001;
 
 class point {
@@ -78,11 +80,16 @@ class point {
     }
 };
 
-double fitness(const vvb& pic, const Mat& im) { // const Mat<CV_8UC1>& im
+vvb cur;
+long long cure;
+vvi cur_got;
+Mat image;
+
+void fitness() { // const Mat<CV_8UC1>& im
   vector<vector<int> > got(DIM, vector<int>(DIM, 0));
   for (int i = 0; i < ALL; ++i) {
     for (int j = i + 1; j < ALL; ++j) {
-      if (pic[i][j]) {
+      if (cur[i][j]) {
         point a(i);
         point b(j);
         for (double k = 0; k < (b - a).len(); k += STEP) {
@@ -94,35 +101,20 @@ double fitness(const vvb& pic, const Mat& im) { // const Mat<CV_8UC1>& im
       }
     }
   }
-  double res = 0;
+  long long res = 0;
   for (int i = 0; i < DIM; ++i) {
     for (int j = 0; j < DIM; ++j) {
-      double x = max(0.0, (double(abs(255 - got[i][j] * ROPE - int(im.at<uint8_t>(i, j)))))
-        * (2.0 - (point(0.5, 0.5) - point(double(i) / DIM, double(j) / DIM)).len()));
+      long long coef = int(K * (point(0.5, 0.5) - point(1.0 * i / DIM, 1.0 * j / DIM)).len());
+      coef *= coef;
+      coef *= coef;
+      long long x = max(0, abs(255 - got[i][j] * ROPE - int(image.at<uint8_t>(i, j))));
+      x *= x * (4ll * K * K * K * K - coef);
       res += x;
     }
   }
-  return res;
+  cure = res;
+  cur_got = got;
 }
-
-vvb next(vvb cur, double t) {
-  int cnt = min(ALL * ALL / 20, max(int(ALL * ALL * (1e3 * t)), 1));
-  while (cnt--) {
-    int i = rand() % ALL;
-    int j = rand() % ALL;
-    if (i > j) {
-      swap(i, j);
-    }
-    cur[i][j] = (cur[i][j] ^ true);
-  }
-  return cur;
-}
-
-vvb cur, opt;
-double cure;
-double opte;
-double t;
-Mat res;
 
 void Draw() {
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -163,7 +155,7 @@ void Draw() {
     }
   }*/
 
-  glColor4f(0, 0, 0, 0.5);
+  glColor4f(0, 0, 0, 0.9);
   for (int i = 0; i < ALL; ++i) {
     for (int j = i + 1; j < ALL; ++j) {
       if (cur[i][j]) {
@@ -184,29 +176,92 @@ void save(const string& s) {
   out << SZ << endl;
   for (int i = 0; i < ALL; ++i) {
     for (int j = 0; j < ALL; ++j) {
-      out << opt[i][j] << " ";
+      out << cur[i][j] << " ";
     }
     out << endl;
   }
 }
 
-void Timer(int value) {
-  cerr << t << " " << cure << " " << opte << endl;
-  for (int i = 0; i < 100; ++i) {
-    vvb nxt = next(cur, t);
-    double nxte = fitness(nxt, res);
-    if (nxte < cure || (exp((opte - nxte) / max(1e-5, t)) > double(rand() % 1000) / 1000.0)) {
-      cure = nxte;
-      cur = nxt;
-    }
-    if (opte > cure) {
-      opt = cur;
-      opte = cure;
-    }
-    t *= SLOWNESS;
+long long k = 0;
+const long long P = 1e9 + 9;
+
+void next(vvb& cur, vvi& got, long long& cure) {
+  int i, j;
+  if (rand() % 2) {
+    i = k % ALL; //rand() % ALL;
+    j = k / ALL; //rand() % ALL;
+    k = (k + P) % (ALL * ALL);
+  } else {
+    i = rand() % ALL;
+    j = rand() % ALL;
   }
-  save("table.save");
+
+  if (i > j) {
+    swap(i, j);
+  }
+  cur[i][j] = (cur[i][j] ^ true);
+
+  int kk = -1;
+  if (cur[i][j]) {
+    kk = 1;
+  }
+
+  vector<pair<int, int> > changed;
+  vector<int> was;
+  point a(i);
+  point b(j);
+  pair<int, int> last = {-1, -1};
+  for (double k = 0; k < (b - a).len(); k += STEP) {
+    point cur = a + (b - a).norm(k);
+    if (cur.x < 1.0 && cur.y < 1.0 && cur.x >= 0 && cur.y >= 0) {
+      pair<int, int> p = {int(cur.x * DIM), int(cur.y * DIM)};
+      if (last != p) {
+        changed.push_back(p);
+        was.push_back(got[p.first][p.second]);
+      }
+      got[p.first][p.second] += kk;
+      last = p;
+    }
+  }
+
+  long long res = cure;
+  for (int id = 0; id < changed.size(); ++id) {
+    auto p = changed[id];
+    int i = p.first;
+    int j = p.second;
+    long long x_was = max(0, abs(255 - was[id] * ROPE - int(image.at<uint8_t>(i, j))));
+
+    long long x_now = max(0, abs(255 - (got[i][j]) * ROPE - int(image.at<uint8_t>(i, j))));
+
+    long long coef = int(K * (point(0.5, 0.5) - point(1.0 * i / DIM, 1.0 * j / DIM)).len());
+    coef *= coef;
+    coef *= coef;
+    coef *= coef;
+    x_now *= x_now * (4ll * K * K * K * K - coef);
+    x_was *= x_was * (4ll * K * K * K * K - coef);
+
+    res += x_now - x_was;
+  }
+
+  if (res > cure) {
+    for (int id = 0; id < changed.size(); ++id) {
+      got[changed[id].first][changed[id].second] = was[id];
+    }
+    cur[i][j] = (cur[i][j] ^ true);
+  } else {
+    cure = res;
+  }
+}
+
+int iter = 0;
+
+void Timer(int value) {
+  cerr << iter++ << "000 " << cure << endl;
+  for (int i = 0; i < 1000; ++i) {
+    next(cur, cur_got, cure);
+  }
   Draw();
+  //fitness();
 	glutTimerFunc(50, Timer, 1);
 }
 
@@ -224,42 +279,30 @@ int main(int argc, char* argv[]) {
   Mat im = I.clone();
   resize(I, im, cv::Size(DIM, DIM), 0, 0, INTER_LINEAR);
   cvtColor(im, im, cv::COLOR_BGR2GRAY);
-  res = im.clone();
-  bilateralFilter(im, res, 3, 75, 75);
-  im = res.clone();
+  image = im.clone();
+  bilateralFilter(im, image, 3, 75, 75);
+  im = image.clone();
 
-  /*for (int i = 0; i < DIM; ++i) {
+  int mx = -1;
+  int mn = 1000;
+  for (int i = 0; i < DIM; ++i) {
     for (int j = 0; j < DIM; ++j) {
-      int sum = 0;
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
-          if (abs(dx) + abs(dy) != 0) {
-            if (0 <= i + dx && i + dx < DIM &&
-                0 <= j + dy && j + dy < DIM) {
-                  sum -= im.at<uint8_t>(i + dx, j + dy);
-            } else {
-              sum -= int(im.at<uint8_t>(i, j));
-            }
-          } else if (dx == 0 && dy == 0) {
-            sum += 8 * int(im.at<uint8_t>(i, j));
-          }
-        }
-      }
-      res.at<uint8_t>(i, j) = 100 - min(90, abs(sum));
+      mn = min(mn, int(image.at<uint8_t>(i, j)));
+      mx = max(mx, int(image.at<uint8_t>(i, j)));
     }
-  }*/
+  }
+  for (int i = 0; i < DIM; ++i) {
+    for (int j = 0; j < DIM; ++j) {
+      image.at<uint8_t>(i, j) = int(image.at<uint8_t>(i, j) - mn) * (150) / (mx) + 50;
+    }
+  }
 
   namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
-  imshow( "Display window", res);                   // Show our image inside it.
+  imshow( "Display window", image);                   // Show our image inside it.
   waitKey(0);
 
   cur = vvb(ALL, vector<bool>(ALL, 0));
-  opt = vvb(ALL, vector<bool>(ALL, 0));
-  cur = next(cur, 1);
-  opt = cur;
-  cure = fitness(cur, res);
-  opte = cure;
-  t = 1e-5;
+  fitness();
 
   glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);
