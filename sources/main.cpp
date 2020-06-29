@@ -1,91 +1,69 @@
 #include "rope.hpp"
 
-using vvb = vector<vector<bool> >;
-using vvi = vector<vector<int> >;
-
-const int K = 3;
-const int WinHei = 800;
-const int WinWid = 800;
-
-const double EPS = 1e-6;
-const double SLOWNESS = 0.9999;
-const int INF = 1e9;
-const int SZ = 200;
-
-const int DIM = 200;
-const int ALL = SZ * 4;
-const int ROPE = 4;
-const double STEP = 0.001;
-
-class point {
-  public:
-    double x, y;
-
-    point(double xx, double yy) {
-      x = xx;
-      y = yy;
-    }
-
-    point(int id) {
-      assert(0 <= id && id < ALL);
-      if (id < SZ) {
-        x = double(id) / SZ;
-        y = 0;
-      } else if (id < SZ * 2) {
-        x = 1.0;
-        y = double(id - SZ) / SZ;
-      } else if (id < SZ * 3) {
-        x = 1.0 - double(id - SZ * 2) / SZ;
-        y = 1.0;
-      } else {
-        x = 0;
-        y = 1.0 - double(id - SZ * 3) / SZ;
-      }
-    }
-
-    point norm(double len) const {
-      return point(x * len / (*this).len(), y * len / (*this).len());
-    }
-
-    point operator-() const {
-      return point(-x, -y);
-    }
-
-    point operator+(const point& other) const {
-      return point(x + other.x, y + other.y);
-    }
-
-    point operator-(const point& other) const {
-      return point(x - other.x, y - other.y);
-    }
-
-    point operator*(double k) const {
-      return point(x * k, y * k);
-    }
-
-    point operator/(double k) const {
-      return point(x / k, y / k);
-    }
-
-    double len() const {
-      return sqrt(x * x + y * y);
-    }
-
-    bool operator==(const point& other) const {
-      return (abs(x - other.x) < EPS) && (abs(y - other.y) < EPS);
-    }
-
-    bool operator!=(const point& other) const {
-      return !(*this == other);
-    }
-};
-
 vvb cur;
 long long cure;
 vvi cur_got;
 Mat image;
 
-void fitness() { // const Mat<CV_8UC1>& im
+point::point(double xx, double yy) {
+  x = xx;
+  y = yy;
+}
+
+point::point(int id) {
+  assert(0 <= id && id < ALL);
+  if (id < SZ) {
+    x = double(id) / SZ;
+    y = 0;
+  } else if (id < SZ * 2) {
+    x = 1.0;
+    y = double(id - SZ) / SZ;
+  } else if (id < SZ * 3) {
+    x = 1.0 - double(id - SZ * 2) / SZ;
+    y = 1.0;
+  } else {
+    x = 0;
+    y = 1.0 - double(id - SZ * 3) / SZ;
+  }
+}
+
+point point::norm(double len) const {
+  return point(x * len / (*this).len(), y * len / (*this).len());
+}
+
+point point::operator-() const {
+  return point(-x, -y);
+}
+
+point point::operator+(const point& other) const {
+  return point(x + other.x, y + other.y);
+}
+
+point point::operator-(const point& other) const {
+  return point(x - other.x, y - other.y);
+}
+
+point point::operator*(double k) const {
+  return point(x * k, y * k);
+}
+
+point point::operator/(double k) const {
+  return point(x / k, y / k);
+}
+
+double point::len() const {
+  return sqrt(x * x + y * y);
+}
+
+bool point::operator==(const point& other) const {
+  return (abs(x - other.x) < EPS) && (abs(y - other.y) < EPS);
+}
+
+bool point::operator!=(const point& other) const {
+  return !(*this == other);
+}
+
+void fitness(vvb& cur, ll& cure, vvi& cur_got, const Mat& image) { // const Mat<CV_8UC1>& im
   vector<vector<int> > got(DIM, vector<int>(DIM, 0));
   for (int i = 0; i < ALL; ++i) {
     for (int j = i + 1; j < ALL; ++j) {
@@ -119,32 +97,10 @@ void fitness() { // const Mat<CV_8UC1>& im
 void Draw() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	glPushMatrix();
-/*
-  Mat got(DIM, DIM, CV_8UC1);
-  for (int i = 0; i < got.rows; ++i) {
-    for (int j = 0; j < got.cols; ++j) {
-      got.at<uint8_t>(i, j) = 255;
-    }
-  }
-
-  for (int i = 0; i < ALL; ++i) {
-    for (int j = i + 1; j < ALL; ++j) {
-      if (cur[i][j]) {
-        point a(i);
-        point b(j);
-        for (double k = 0; k < (b - a).len(); k += STEP) {
-          point cur = a + (b - a).norm(k);
-          if (cur.x < 1.0 && cur.y < 1.0 && cur.x >= 0 && cur.y >= 0) {
-            got.at<uint8_t>(int(cur.x * DIM) , int(cur.y * DIM)) = max(0, int(got.at<uint8_t>(int(cur.x * DIM), int(cur.y * DIM))) - ROPE);
-          }
-        }
-      }
-    }
-  }
 
   for (int i = 0; i < DIM; ++i) {
     for (int j = 0; j < DIM; ++j) {
-      double c = double(got.at<uint8_t>(i, j)) / 255;
+      double c = double(max(0, abs(255 - cur_got[i][j] * ROPE))) / 255;
       glColor4f(c, c, c, 0);
       glBegin(GL_QUADS);
         glVertex2f(double(j) / DIM, 1.0 - double(i) / DIM);
@@ -153,8 +109,9 @@ void Draw() {
         glVertex2f(double(j) / DIM, 1.0 - double(i + 1) / DIM);
       glEnd();
     }
-  }*/
+  }
 
+/*
   glColor4f(0, 0, 0, 0.9);
   for (int i = 0; i < ALL; ++i) {
     for (int j = i + 1; j < ALL; ++j) {
@@ -166,6 +123,7 @@ void Draw() {
       }
     }
   }
+*/
 
   glPopMatrix();
 	glutSwapBuffers();
@@ -183,7 +141,6 @@ void save(const string& s) {
 }
 
 long long k = 0;
-const long long P = 1e9 + 9;
 
 void next(vvb& cur, vvi& got, long long& cure) {
   int i, j;
@@ -253,15 +210,12 @@ void next(vvb& cur, vvi& got, long long& cure) {
   }
 }
 
-int iter = 0;
-
 void Timer(int value) {
-  cerr << iter++ << "000 " << cure << endl;
+  cerr << cure << endl;
   for (int i = 0; i < 1000; ++i) {
     next(cur, cur_got, cure);
   }
   Draw();
-  //fitness();
 	glutTimerFunc(50, Timer, 1);
 }
 
@@ -293,16 +247,16 @@ int main(int argc, char* argv[]) {
   }
   for (int i = 0; i < DIM; ++i) {
     for (int j = 0; j < DIM; ++j) {
-      image.at<uint8_t>(i, j) = int(image.at<uint8_t>(i, j) - mn) * (150) / (mx) + 50;
+      image.at<uint8_t>(i, j) = int(image.at<uint8_t>(i, j) - mn) * (200) / (mx) + 20;
     }
   }
 
-  namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
-  imshow( "Display window", image);                   // Show our image inside it.
+  namedWindow( "Display window", WINDOW_AUTOSIZE );
+  imshow( "Display window", image);
   waitKey(0);
 
   cur = vvb(ALL, vector<bool>(ALL, 0));
-  fitness();
+  fitness(cur, cure, cur_got, image);
 
   glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);
@@ -310,7 +264,7 @@ int main(int argc, char* argv[]) {
 	glutInitWindowPosition(100, 100);
 	glutCreateWindow("float");
 	glutDisplayFunc(Draw);
-	glutTimerFunc(50, Timer, 0);//Анимация
-	Initialize();
+	glutTimerFunc(50, Timer, 0);
+  Initialize();
 	glutMainLoop();
 }
