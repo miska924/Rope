@@ -144,7 +144,7 @@ long long k = 0;
 
 void next(vvb& cur, vvi& got, long long& cure) {
   int i, j;
-  if (rand() % 2) {
+  if (rand() % 3 == 0) {
     i = k % ALL; //rand() % ALL;
     j = k / ALL; //rand() % ALL;
     k = (k + P) % (ALL * ALL);

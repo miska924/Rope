@@ -18,9 +18,9 @@ const double SLOWNESS = 0.9999;
 const int INF = 1e9;
 const int SZ = 200;
 
-const int DIM = 200;
+const int DIM = 1000;
 const int ALL = SZ * 4;
-const int ROPE = 1;
+const int ROPE = 2;
 const double STEP = 0.2 / DIM;
 
 const long long P = 1e9 + 9;
