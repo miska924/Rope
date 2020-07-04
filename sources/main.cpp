@@ -1,7 +1,6 @@
 #include "rope.hpp"
 
 vvb cur;
-long long cure;
 vvi cur_got;
 Mat image;
 
@@ -25,6 +24,7 @@ point::point(int id) {
     x = 0;
     y = 1.0 - double(id - SZ * 3) / SZ;
   }
+  *this = point(sin(M_PI * 2 * id / ALL), cos(M_PI * 2 * id / ALL)).norm(0.5) + point(0.5, 0.5);
 }
 
 point point::norm(double len) const {
@@ -63,6 +63,11 @@ bool point::operator!=(const point& other) const {
   return !(*this == other);
 }
 
+bool same_rib(const point& a, const point& b) {
+  return (abs(a.x - b.x) < EPS && (a.x < EPS || a.x + EPS > 1.0)) || (abs(a.y - b.y) < EPS && (a.y < EPS || a.y + EPS > 1.0));
+}
+
+/*
 void fitness(vvb& cur, ll& cure, vvi& cur_got, const Mat& image) { // const Mat<CV_8UC1>& im
   vector<vector<int> > got(DIM, vector<int>(DIM, 0));
   for (int i = 0; i < ALL; ++i) {
@@ -93,6 +98,7 @@ void fitness(vvb& cur, ll& cure, vvi& cur_got, const Mat& image) { // const Mat<
   cure = res;
   cur_got = got;
 }
+*/
 
 void Draw() {
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -141,16 +147,24 @@ void save(const string& s) {
 }
 
 long long k = 0;
+long long it = 0;
 
-void next(vvb& cur, vvi& got, long long& cure) {
+void next(vvb& cur, vvi& got) {
   int i, j;
   if (rand() % 3 == 0) {
     i = k % ALL; //rand() % ALL;
     j = k / ALL; //rand() % ALL;
     k = (k + P) % (ALL * ALL);
+    if (same_rib(point(i), point(j))) {
+      return;
+    }
+    it++;
   } else {
     i = rand() % ALL;
     j = rand() % ALL;
+  }
+  if (same_rib(point(i), point(j))) {
+    return;
   }
 
   if (i > j) {
@@ -181,7 +195,7 @@ void next(vvb& cur, vvi& got, long long& cure) {
     }
   }
 
-  long long res = cure;
+  long long res = 0;
   for (int id = 0; id < changed.size(); ++id) {
     auto p = changed[id];
     int i = p.first;
@@ -193,27 +207,26 @@ void next(vvb& cur, vvi& got, long long& cure) {
     long long coef = int(K * (point(0.5, 0.5) - point(1.0 * i / DIM, 1.0 * j / DIM)).len());
     coef *= coef;
     coef *= coef;
-    coef *= coef;
     x_now *= x_now * (4ll * K * K * K * K - coef);
     x_was *= x_was * (4ll * K * K * K * K - coef);
 
     res += x_now - x_was;
   }
 
-  if (res > cure) {
+  if (res > 0) {
     for (int id = 0; id < changed.size(); ++id) {
       got[changed[id].first][changed[id].second] = was[id];
     }
     cur[i][j] = (cur[i][j] ^ true);
-  } else {
-    cure = res;
   }
 }
 
+string clear_str = "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 void Timer(int value) {
-  cerr << cure << endl;
+  cerr << clear_str << "< " << fixed << setprecision(2) << double(it * 100) / (ALL * ALL * 3 / 8) << "% >";
+  cerr.flush();
   for (int i = 0; i < 1000; ++i) {
-    next(cur, cur_got, cure);
+    next(cur, cur_got);
   }
   Draw();
 	glutTimerFunc(50, Timer, 1);
@@ -256,7 +269,8 @@ int main(int argc, char* argv[]) {
   waitKey(0);
 
   cur = vvb(ALL, vector<bool>(ALL, 0));
-  fitness(cur, cure, cur_got, image);
+  cur_got = vector<vector<int> >(DIM, vector<int>(DIM, 0));
+  //fitness(cur, cure, cur_got, image);
 
   glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);

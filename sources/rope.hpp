@@ -16,14 +16,14 @@ const int WinWid = 1000;
 const double EPS = 1e-6;
 const double SLOWNESS = 0.9999;
 const int INF = 1e9;
-const int SZ = 200;
+const int SZ = 150;//200
 
 const int DIM = 1000;
 const int ALL = SZ * 4;
-const int ROPE = 2;
-const double STEP = 0.2 / DIM;
+const int ROPE = 1;
+const double STEP = 0.1 / DIM;
 
-const long long P = 1e9 + 9;
+const long long P = 503 * 503;
 
 class point {
   public:
